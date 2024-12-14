@@ -9,6 +9,7 @@ import (
     "math"
     "os"
     "strings"
+    "time"
 )
 
 type Config struct {
@@ -27,7 +28,10 @@ func hexToRGB(hex string) color.RGBA {
 }
 
 func main() {
+    totalStart := time.Now()
+
     // Load config
+    configStart := time.Now()
     f, err := os.Open("config.json")
     if err != nil {
         fmt.Println("Error opening config.json:", err)
@@ -40,7 +44,10 @@ func main() {
         fmt.Println("Error decoding JSON:", err)
         return
     }
+    configTime := time.Since(configStart)
 
+    // Initialize variables
+    initStart := time.Now()
     width := config.Width
     height := config.Height
     circleRatio := config.CircleRadiusRatio
@@ -56,7 +63,10 @@ func main() {
     cx := float64(width) / 2.0
     cy := float64(height) / 2.0
     maxRadius := float64(min(width, height)) / 2.0
+    initTime := time.Since(initStart)
 
+    // Pixel processing
+    pixelStart := time.Now()
     for y := 0; y < height; y++ {
         for x := 0; x < width; x++ {
             dx := float64(x) - cx
@@ -86,8 +96,10 @@ func main() {
             img.Set(x, y, c)
         }
     }
+    pixelTime := time.Since(pixelStart)
 
     // Save to file
+    saveStart := time.Now()
     out, err := os.Create("turrell_circle.png")
     if err != nil {
         fmt.Println("Error creating file:", err)
@@ -99,8 +111,20 @@ func main() {
         fmt.Println("Error encoding PNG:", err)
         return
     }
+    saveTime := time.Since(saveStart)
 
-    fmt.Println("Saved as turrell_circle.png")
+    totalTime := time.Since(totalStart)
+
+    // Print timing results
+    fmt.Printf("\nPerformance Breakdown (%s):\n", time.Now().Format("2006-01-02 15:04:05"))
+    fmt.Println(strings.Repeat("=", 50))
+    fmt.Printf("Configuration loading: %v\n", configTime)
+    fmt.Printf("Initialization: %v\n", initTime)
+    fmt.Printf("Pixel processing: %v\n", pixelTime)
+    fmt.Printf("Image saving: %v\n", saveTime)
+    fmt.Println(strings.Repeat("=", 50))
+    fmt.Printf("Total execution time: %v\n", totalTime)
+    fmt.Printf("\nSaved as turrell_circle.png\n")
 }
 
 func min(a, b int) int {
