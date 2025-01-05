@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Circle Audio Visualizer</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: linear-gradient(45deg, #0C0C0C, #181818, #242424);
+            font-family: system-ui, -apple-system, sans-serif;
+        }
+        
+        #controls {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.7);
+            padding: 10px 20px;
+            border-radius: 8px;
+            color: white;
+            display: flex;
+            gap: 20px;
+            align-items: center;
+        }
+
+        button {
+            background: rgba(255, 255, 255, 0.2);
+            border: none;
+            padding: 8px 16px;
+            color: white;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+
+        button:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        #file-input {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div id="controls">
+        <button id="play-pause">Play</button>
+        <input type="file" id="file-input" accept="audio/*">
+        <button id="file-button">Choose File</button>
+    </div>
+
+    <script>
+        const width = window.innerWidth;
+        const height = window.innerHeight;
+
+        // Create SVG
+        const svg = d3.select('body')
+            .append('svg')
+            .attr('width', width)
+            .attr('height', height);
+
+        // Audio setup
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        const analyser = audioContext.createAnalyser();
+        analyser.fftSize = 128;
+        const gainNode = audioContext.createGain();
+
+        const audio = new Audio();
+        let audioSource = null;
+
+        // Connect audio nodes
+        function setupAudioNodes() {
+            audioSource = audioContext.createMediaElementSource(audio);
+            audioSource.connect(gainNode);
+            gainNode.connect(analyser);
+            analyser.connect(audioContext.destination);
+        }
+
+        // Controls setup
+        const playPauseButton = document.getElementById('play-pause');
+        const fileInput = document.getElementById('file-input');
+        const fileButton = document.getElementById('file-button');
+
+        playPauseButton.onclick = () => {
+            if (audio.src) {
+                if (audio.paused) {
+                    audio.play();
+                    playPauseButton.textContent = 'Pause';
+                } else {
+                    audio.pause();
+                    playPauseButton.textContent = 'Play';
+                }
+            }
+        };
+
+        fileButton.onclick = () => fileInput.click();
+
+        fileInput.onchange = (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                audio.src = URL.createObjectURL(file);
+                if (!audioSource) {
+                    setupAudioNodes();
+                }
+            }
+        };
+
+        // Visualization
+        function visualize() {
+            // Create color scale
+            const colorScale = d3.scaleSequential(d3.interpolateRainbow)
+                .domain([1, 255]);
+
+            // Clear existing circles
+            svg.selectAll('circle').remove();
+
+            // Create initial circles
+            const dataArray = new Uint8Array(analyser.frequencyBinCount);
+            svg.selectAll('circle')
+                .data(dataArray)
+                .enter()
+                .append('circle')
+                .attr('cx', width / 2)
+                .attr('cy', height / 2);
+
+            // Animation frame
+            function render() {
+                requestAnimationFrame(render);
+                analyser.getByteFrequencyData(dataArray);
+
+                svg.selectAll('circle')
+                    .data(dataArray)
+                    .attr('r', d => ((Math.min(height, width) / 2) * (d / 255)))
+                    .attr('fill', d => d === 0 ? 'black' : colorScale(d));
+            }
+
+            render();
+        }
+
+        // Start visualization when window loads
+        window.onload = visualize;
+
+        // Handle window resize
+        window.onresize = () => {
+            svg.attr('width', window.innerWidth)
+               .attr('height', window.innerHeight);
+        };
+    </script>
+</body>
+</html>

@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audio Reactive Visualizer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background: #000;
+            color: #fff;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            overflow: hidden;
+        }
+
+        #visualizer {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+
+        .controls {
+            position: fixed;
+            bottom: 2rem;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 2;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 1rem;
+            border-radius: 8px;
+            display: flex;
+            gap: 1rem;
+            backdrop-filter: blur(10px);
+        }
+
+        .upload-btn {
+            background: #4a14ed;
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.3s ease;
+        }
+
+        .upload-btn:hover {
+            background: #3810b5;
+        }
+
+        #file {
+            display: none;
+        }
+
+        .player {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .play-btn {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: #4a14ed;
+            border: none;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .play-btn svg {
+            width: 20px;
+            height: 20px;
+            fill: white;
+        }
+
+        .song-info {
+            font-size: 0.9rem;
+            opacity: 0.8;
+        }
+    </style>
+</head>
+<body>
+    <div id="visualizer"></div>
+    
+    <div class="controls">
+        <div class="player">
+            <button class="play-btn" id="playBtn">
+                <svg viewBox="0 0 24 24">
+                    <path d="M8 5v14l11-7z"/>
+                </svg>
+            </button>
+            <div class="song-info" id="songInfo">No audio loaded</div>
+        </div>
+        <input type="file" id="file" accept="audio/*">
+        <button class="upload-btn" onclick="document.getElementById('file').click()">
+            Upload Audio
+        </button>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        // Audio Visualizer class from previous artifact
+        class AudioVisualizer {
+            constructor(options = {}) {
+                this.canvas = document.createElement('canvas')
+                this.ctx = this.canvas.getContext('webgl')
+                this.audio = null
+                this.analyser = null
+                this.uniforms = {
+                    time: { value: 0 },
+                    frequency: { value: 0 }
+                }
+                
+                this.initGL()
+                this.initAudio()
+                this.createGeometry()
+                
+                this.settings = {
+                    colorSpeed: 0.1,
+                    pulseStrength: 1.0,
+                    noiseAmount: 0.5,
+                    ...options
+                }
+            }
+
+            initGL() {
+                this.scene = new THREE.Scene()
+                this.camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000)
+                this.renderer = new THREE.WebGLRenderer({canvas: this.canvas, alpha: true})
+                this.renderer.setSize(window.innerWidth, window.innerHeight)
+                this.camera.position.z = 1
+            }
+
+            initAudio() {
+                this.audioCtx = new (window.AudioContext || window.webkitAudioContext)()
+                this.analyser = this.audioCtx.createAnalyser()
+                this.analyser.fftSize = 256
+                this.frequencies = new Uint8Array(this.analyser.frequencyBinCount)
+            }
+
+            createGeometry() {
+                const geometry = new THREE.PlaneGeometry(2, 2)
+                const material = new THREE.ShaderMaterial({
+                    uniforms: this.uniforms,
+                    vertexShader: `
+                        varying vec2 vUv;
+                        void main() {
+                            vUv = uv;
+                            gl_Position = vec4(position, 1.0);
+                        }
+                    `,
+                    fragmentShader: `
+                        uniform float time;
+                        uniform float frequency;
+                        varying vec2 vUv;
+
+                        void main() {
+                            vec2 center = vUv - 0.5;
+                            float dist = length(center);
+                            
+                            float pulse = sin(time * 2.0) * frequency;
+                            float circle = smoothstep(0.5 + pulse * 0.1, 0.0, dist);
+                            
+                            vec3 color = 0.5 + 0.5 * cos(time + vUv.xyx + vec3(0,2,4));
+                            gl_FragColor = vec4(color * circle, circle);
+                        }
+                    `,
+                    transparent: true
+                })
+                this.mesh = new THREE.Mesh(geometry, material)
+                this.scene.add(this.mesh)
+            }
+
+            update() {
+                if (this.analyser) {
+                    this.analyser.getByteFrequencyData(this.frequencies)
+                    this.uniforms.frequency.value = this.frequencies[0] / 255
+                }
+
+                this.uniforms.time.value += 0.01 * this.settings.colorSpeed
+                this.renderer.render(this.scene, this.camera)
+                requestAnimationFrame(() => this.update())
+            }
+
+            connectAudio(audioElement) {
+                this.audio = audioElement
+                const source = this.audioCtx.createMediaElementSource(audioElement)
+                source.connect(this.analyser)
+                this.analyser.connect(this.audioCtx.destination)
+            }
+
+            onResize() {
+                const width = window.innerWidth
+                const height = window.innerHeight
+                this.camera.aspect = width / height
+                this.camera.updateProjectionMatrix()
+                this.renderer.setSize(width, height)
+            }
+        }
+
+        // Initialize visualizer
+        const container = document.getElementById('visualizer')
+        const visualizer = new AudioVisualizer({
+            colorSpeed: 0.2,
+            pulseStrength: 1.5
+        })
+        container.appendChild(visualizer.canvas)
+
+        // Audio handling
+        const audio = new Audio()
+        const playBtn = document.getElementById('playBtn')
+        const fileInput = document.getElementById('file')
+        const songInfo = document.getElementById('songInfo')
+        let isPlaying = false
+
+        // Connect audio to visualizer
+        visualizer.connectAudio(audio)
+
+        // Start animation
+        visualizer.update()
+
+        // Play button handler
+        playBtn.addEventListener('click', () => {
+            if (isPlaying) {
+                audio.pause()
+                playBtn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>'
+            } else {
+                audio.play()
+                playBtn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>'
+            }
+            isPlaying = !isPlaying
+        })
+
+        // File upload handler
+        fileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0]
+            if (file) {
+                const url = URL.createObjectURL(file)
+                audio.src = url
+                songInfo.textContent = file.name
+                audio.play()
+                isPlaying = true
+                playBtn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>'
+            }
+        })
+
+        // Handle window resize
+        window.addEventListener('resize', () => visualizer.onResize())
+
+        // Handle audio end
+        audio.addEventListener('ended', () => {
+            isPlaying = false
+            playBtn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>'
+        })
+    </script>
+</body>
+</html>

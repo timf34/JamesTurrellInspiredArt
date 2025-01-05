@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>Wave.js Microphone Visualization</title>
+    <!-- Include the Wave.js script from CDN -->
+    <script src="https://cdn.jsdelivr.net/gh/foobar404/wave.js/dist/bundle.js"></script>
+    <style>
+        body {
+            margin: 0;
+            background: #000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+        canvas {
+            display: block;
+            background: #111;
+        }
+    </style>
+</head>
+<body>
+    <audio id="audioElmId" muted></audio>
+    <canvas id="canvasElmId" width="600" height="600"></canvas>
+    <script>
+        async function setupMicrophone() {
+            try {
+                // Request microphone access
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                
+                // Create audio context
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const source = audioContext.createMediaStreamSource(stream);
+                
+                // Create analyzer node
+                const analyser = audioContext.createAnalyser();
+                source.connect(analyser);
+                
+                // Get the audio element and set up the stream
+                const audioElement = document.querySelector("#audioElmId");
+                audioElement.srcObject = stream;
+                audioElement.muted = true; // Ensure audio is muted
+                audioElement.play();
+                
+                const canvasElement = document.querySelector("#canvasElmId");
+                
+                // Initialize Wave
+                const wave = new Wave(audioElement, canvasElement);
+
+                // Add animations
+                wave.addAnimation(new wave.animations.Wave({
+                    lineWidth: 10,
+                    lineColor: "red",
+                    count: 20
+                }));
+
+                wave.addAnimation(new wave.animations.Square({
+                    count: 50,
+                    diamater: 300
+                }));
+
+                wave.addAnimation(new wave.animations.Glob({
+                    fillColor: {gradient: ["red","blue","green"], rotate: 45},
+                    lineWidth: 10,
+                    lineColor: "#fff"
+                }));
+
+            } catch (error) {
+                console.log("Error accessing microphone:", error);
+            }
+        }
+
+        // Start the setup when the page loads
+        setupMicrophone();
+    </script>
+</body>
+</html>

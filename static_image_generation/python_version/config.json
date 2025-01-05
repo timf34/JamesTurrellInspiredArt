@@ -1,6 +1,6 @@
 {
-  "width": 2000,
-  "height": 2000,
+  "width": 8000,
+  "height": 8000,
   "circle_radius_ratio": 0.4,
   "center_color": "#05D3C1",
   "edge_color": "#AAAAAA"
